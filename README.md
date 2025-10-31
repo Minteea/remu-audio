@@ -1,28 +1,30 @@
 # Remu Audio
 
-一个功能强大的 Rust 异步音频播放库，支持本地文件播放和网络流媒体播放。
+A powerful Rust asynchronous audio playback library with support for local file playback and network streaming.
 
-## ✨ 特性
+English | [简体中文](./README.zh-CN.md)
 
-- 🎵 **多格式支持** - 支持 MP3、WAV、FLAC、OGG 等常见音频格式
-- 🌐 **网络流播放** - 支持从 URL 加载和播放音频流
-- ⚡ **异步加载** - 基于 Tokio 的异步下载和播放
-- 🎛️ **完整控制** - 播放、暂停、跳转、音量控制等功能
-- 📡 **事件驱动** - 丰富的播放事件回调系统
-- 🔧 **灵活扩展** - 支持自定义 Reader 和 Source
+## ✨ Features
 
-## 📦 安装
+- 🎵 **Multiple Format Support** - Supports common audio formats including MP3, WAV, FLAC, OGG, and more
+- 🌐 **Network Streaming** - Load and play audio streams from URLs
+- ⚡ **Async Loading** - Tokio-based asynchronous downloading and playback
+- 🎛️ **Full Control** - Play, pause, seek, volume control, and more
+- 📡 **Event-Driven** - Rich event callback system for playback events
+- 🔧 **Flexible Extension** - Support for custom Readers and Sources
 
-在 `Cargo.toml` 中添加依赖：
+## 📦 Installation
+
+Add the dependency to your `Cargo.toml`:
 
 ```toml
 [dependencies]
 remu-audio = "0.1.0"
 ```
 
-## 🚀 快速开始
+## 🚀 Quick Start
 
-### 基础示例
+### Basic Example
 
 ```rust
 use remu_audio::player::{Player, PlaybackControl};
@@ -31,152 +33,152 @@ use anyhow::Result;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // 创建播放器实例
+    // Create a player instance
     let mut player = Player::new()?;
 
-    // 设置事件回调
+    // Set up event callback
     player.set_callback(|event| {
         match event {
-            PlayerEvent::Play => println!("开始播放"),
-            PlayerEvent::Pause => println!("播放暂停"),
-            PlayerEvent::Ended => println!("播放结束"),
+            PlayerEvent::Play => println!("Started playing"),
+            PlayerEvent::Pause => println!("Paused"),
+            PlayerEvent::Ended => println!("Playback ended"),
             _ => {}
         }
     });
 
-    // 加载本地文件
+    // Load a local file
     player.load_file("audio.mp3").await?;
 
-    // 开始播放
+    // Start playback
     player.play();
 
-    // 等待播放完成
+    // Wait for playback
     std::thread::sleep(std::time::Duration::from_secs(10));
 
     Ok(())
 }
 ```
 
-### 网络流播放
+### Network Streaming
 
 ```rust
-// 从 URL 加载音频
+// Load audio from URL
 player.load_url("https://example.com/audio.mp3").await?;
 player.play();
 ```
 
-### 播放控制
+### Playback Control
 
 ```rust
-// 暂停
+// Pause
 player.pause();
 
-// 继续播放
+// Resume playback
 player.play();
 
-// 跳转到指定位置（20 秒）
+// Seek to position (20 seconds)
 player.seek(Duration::from_secs(20))?;
 
-// 设置音量（0.0 - 1.0）
+// Set volume (0.0 - 1.0)
 player.set_volume(0.5);
 
-// 获取播放状态
+// Get playback state
 let is_paused = player.paused();
 let position = player.position();
 let duration = player.duration();
 let volume = player.volume();
 ```
 
-## 📚 API 文档
+## 📚 API Documentation
 
 ### Player
 
-主要的播放器类，提供音频加载和播放功能。
+The main player class providing audio loading and playback functionality.
 
-#### 方法
+#### Methods
 
-- `new()` - 创建新的播放器实例
-- `load_file(path: &str)` - 加载本地音频文件
-- `load_url(url: &str)` - 从 URL 加载音频
-- `load_reader<R>(reader: R)` - 从自定义 Reader 加载
-- `load_source(source: impl Source)` - 从 Source 加载
-- `set_callback<F>(callback: F)` - 设置播放事件回调
-- `set_loader_callback<F>(callback: F)` - 设置加载事件回调
-- `stop()` - 停止播放并清空状态
-- `ended()` - 检查是否播放完成
+- `new()` - Create a new player instance
+- `load_file(path: &str)` - Load a local audio file
+- `load_url(url: &str)` - Load audio from a URL
+- `load_reader<R>(reader: R)` - Load from a custom Reader
+- `load_source(source: impl Source)` - Load from a Source
+- `set_callback<F>(callback: F)` - Set playback event callback
+- `set_loader_callback<F>(callback: F)` - Set loader event callback
+- `stop()` - Stop playback and clear state
+- `ended()` - Check if playback has ended
 
 ### PlaybackControl Trait
 
-提供播放控制接口，由 `Player` 和 `PlayerControl` 实现。
+Provides playback control interface, implemented by `Player` and `PlayerControl`.
 
-#### 方法
+#### Methods
 
-- `play()` - 开始/继续播放
-- `pause()` - 暂停播放
-- `seek(position: Duration)` - 跳转到指定位置
-- `set_volume(volume: f32)` - 设置音量（0.0 - 1.0）
-- `paused()` - 获取暂停状态
-- `position()` - 获取当前播放位置
-- `duration()` - 获取总时长
-- `volume()` - 获取当前音量
+- `play()` - Start/resume playback
+- `pause()` - Pause playback
+- `seek(position: Duration)` - Seek to a specific position
+- `set_volume(volume: f32)` - Set volume (0.0 - 1.0)
+- `paused()` - Get pause state
+- `position()` - Get current playback position
+- `duration()` - Get total duration
+- `volume()` - Get current volume
 
 ### PlayerEvent
 
-播放器事件枚举，用于事件回调。
+Player event enumeration used for event callbacks.
 
-#### 事件类型
+#### Event Types
 
-- `Play` - 播放开始或从暂停恢复
-- `Pause` - 播放暂停
-- `Playing` - 正在播放（数据充足）
-- `Waiting` - 正在缓冲/等待数据
-- `Ended` - 播放结束
-- `Emptied` - 播放内容被清空
-- `DurationChange` - 时长变化
-- `VolumeChange` - 音量变化
-- `Seeking` - 跳转操作开始
-- `Seeked` - 跳转操作完成
-- `LoadStart` - 开始加载
-- `LoadedData` - 数据加载完成
-- `LoadedMetadata` - 元数据加载完成
-- `Error { message: String }` - 发生错误
+- `Play` - Playback started or resumed from pause
+- `Pause` - Playback paused
+- `Playing` - Currently playing (data sufficient)
+- `Waiting` - Buffering/waiting for data
+- `Ended` - Playback ended
+- `Emptied` - Playback content cleared
+- `DurationChange` - Duration changed
+- `VolumeChange` - Volume changed
+- `Seeking` - Seek operation started
+- `Seeked` - Seek operation completed
+- `LoadStart` - Loading started
+- `LoadedData` - Data loaded
+- `LoadedMetadata` - Metadata loaded
+- `Error { message: String }` - An error occurred
 
 ### LoaderEvent
 
-加载器事件枚举，用于监听下载状态。
+Loader event enumeration for monitoring download status.
 
-#### 事件类型
+#### Event Types
 
-- `Completed` - 下载完成
-- `Aborted` - 下载中止
+- `Completed` - Download completed
+- `Aborted` - Download aborted
 
-## 🎯 使用场景
+## 🎯 Use Cases
 
-### 场景 1：音乐播放器
+### Use Case 1: Music Player
 
 ```rust
 let mut player = Player::new()?;
 
-// 设置完整的事件监听
+// Set up comprehensive event listeners
 player.set_callback(|event| {
     match event {
         PlayerEvent::LoadStart => {
-            println!("正在加载...");
+            println!("Loading...");
         }
         PlayerEvent::LoadedMetadata => {
-            println!("准备就绪");
+            println!("Ready to play");
         }
         PlayerEvent::Play => {
-            println!("▶️ 播放");
+            println!("▶️ Playing");
         }
         PlayerEvent::Pause => {
-            println!("⏸️ 暂停");
+            println!("⏸️ Paused");
         }
         PlayerEvent::Ended => {
-            println!("✅ 播放完成");
+            println!("✅ Playback completed");
         }
         PlayerEvent::Error { message } => {
-            eprintln!("❌ 错误: {}", message);
+            eprintln!("❌ Error: {}", message);
         }
         _ => {}
     }
@@ -186,35 +188,35 @@ player.load_file("song.mp3").await?;
 player.play();
 ```
 
-### 场景 2：流媒体播放
+### Use Case 2: Streaming Media Player
 
 ```rust
 let mut player = Player::new()?;
 
-// 监听下载进度
+// Monitor download progress
 player.set_loader_callback(|event| {
     match event {
         LoaderEvent::Completed => {
-            println!("✅ 下载完成");
+            println!("✅ Download completed");
         }
         LoaderEvent::Aborted => {
-            println!("⚠️ 下载中止");
+            println!("⚠️ Download aborted");
         }
     }
 });
 
-// 加载网络音频
+// Load network audio
 player.load_url("https://example.com/stream.mp3").await?;
 player.play();
 ```
 
-### 场景 3：多控制器共享
+### Use Case 3: Shared Controller
 
 ```rust
 let mut player = Player::new()?;
 let control = player.control();
 
-// 在其他线程中控制播放
+// Control playback from another thread
 std::thread::spawn(move || {
     let ctrl = control.read().unwrap();
     ctrl.play();
@@ -223,72 +225,72 @@ std::thread::spawn(move || {
 });
 ```
 
-## 🔧 依赖项
+## 🔧 Dependencies
 
-- `rodio` - 音频播放核心
-- `symphonia` - 音频解码
-- `cpal` - 跨平台音频 I/O
-- `tokio` - 异步运行时
-- `reqwest` - HTTP 客户端
-- `anyhow` - 错误处理
+- `rodio` - Audio playback core
+- `symphonia` - Audio decoding
+- `cpal` - Cross-platform audio I/O
+- `tokio` - Async runtime
+- `reqwest` - HTTP client
+- `anyhow` - Error handling
 
-## 📝 示例
+## 📝 Examples
 
-项目包含完整的示例代码，展示了各种使用场景：
+The project includes complete example code demonstrating various use cases:
 
 ```bash
 cargo run --example test_playback
 ```
 
-示例文件位于 `examples/test_playback.rs`，包含：
+The example file is located at `examples/test_playback.rs` and includes:
 
-- 本地文件播放
-- 网络 URL 播放
-- 播放控制（播放、暂停、跳转）
-- 音量调整
-- 事件监听
+- Local file playback
+- Network URL playback
+- Playback control (play, pause, seek)
+- Volume adjustment
+- Event listeners
 
-## 🛠️ 开发
+## 🛠️ Development
 
-### 构建项目
+### Build the Project
 
 ```bash
 cargo build
 ```
 
-### 运行测试
+### Run Tests
 
 ```bash
 cargo test
 ```
 
-### 运行示例
+### Run Examples
 
 ```bash
 cargo run --example test_playback
 ```
 
-## 📄 许可证
+## 📄 License
 
-本项目采用 MIT 许可证 - 详见 [LICENSE](LICENSE) 文件。
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🤝 贡献
+## 🤝 Contributing
 
-欢迎提交 Issue 和 Pull Request！
+Issues and Pull Requests are welcome!
 
-## 📮 联系方式
+## 📮 Contact
 
-- 项目主页: https://github.com/Minteea/remu-audio
-- 问题反馈: https://github.com/Minteea/remu-audio/issues
+- Project Homepage: https://github.com/Minteea/remu-audio
+- Issue Tracker: https://github.com/Minteea/remu-audio/issues
 
-## 🙏 致谢
+## 🙏 Acknowledgments
 
-感谢以下开源项目：
+Thanks to the following open source projects:
 
-- [rodio](https://github.com/RustAudio/rodio) - 音频播放库
-- [symphonia](https://github.com/pdeljanov/Symphonia) - 音频解码库
-- [cpal](https://github.com/RustAudio/cpal) - 跨平台音频库
+- [rodio](https://github.com/RustAudio/rodio) - Audio playback library
+- [symphonia](https://github.com/pdeljanov/Symphonia) - Audio decoding library
+- [cpal](https://github.com/RustAudio/cpal) - Cross-platform audio library
 
-## 📃 关于 README
+## 📃 About README
 
-✨ 本 README 使用 Github Copilot 生成 ✨
+✨ This README was generated with GitHub Copilot ✨
