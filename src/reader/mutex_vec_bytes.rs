@@ -1,7 +1,7 @@
 use bytes::{Bytes, BytesMut};
 use std::io::{Read, Result, Seek, SeekFrom};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Condvar, Mutex, MutexGuard};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Condvar, Mutex};
 use tokio_util::sync::CancellationToken;
 
 use super::AppendableDataWrapper;
@@ -93,7 +93,6 @@ impl AppendableDataWrapper for MVecBytesWrapper {
             }
 
             // 将 append_data 中的所有完整块推入 data
-            let new_chunk_num = append_data.len();
             self.data.lock().unwrap().append(&mut append_data);
         }
     }
@@ -106,6 +105,11 @@ impl AppendableDataWrapper for MVecBytesWrapper {
             self.current_chunk = BytesMut::new();
         }
         self.completed.store(true, Ordering::SeqCst);
+    }
+    fn set_capacity(&mut self, capacity: usize) {
+        let mut data = self.data.lock().unwrap();
+        let len = data.len();
+        data.reserve_exact((capacity - len) / self.chunk_size + 1);
     }
 }
 

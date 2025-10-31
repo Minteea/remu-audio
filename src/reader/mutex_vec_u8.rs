@@ -36,6 +36,11 @@ impl AppendableDataWrapper for MVecU8Wrapper {
     fn complete(&mut self) {
         self.completed.store(true, Ordering::SeqCst);
     }
+    fn set_capacity(&mut self, capacity: usize) {
+        let mut data = self.data.lock().unwrap();
+        let len = data.len();
+        data.reserve_exact(capacity - len);
+    }
 }
 
 pub struct MVecU8Reader {

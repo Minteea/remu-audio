@@ -10,8 +10,8 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 use crate::decoder::Decoder;
-use crate::downloader::Downloader;
 use crate::events::PlayerEvent;
+use crate::loader::downloader::Downloader;
 use crate::reader;
 
 #[allow(dead_code)]
@@ -24,7 +24,6 @@ pub struct AudioMetadata {
 pub trait PlaybackControl {
     fn play(&self);
     fn pause(&self);
-    fn stop(&mut self);
     fn seek(&self, position: Duration) -> Result<(), rodio::source::SeekError>;
     fn set_volume(&self, volume: f32);
 
@@ -39,6 +38,12 @@ pub struct PlayerControl {
     duration: Option<Duration>,
 }
 
+impl PlayerControl {
+    fn stop(&self) {
+        self.sink.stop();
+    }
+}
+
 impl PlaybackControl for PlayerControl {
     fn play(&self) {
         self.sink.play();
@@ -46,10 +51,6 @@ impl PlaybackControl for PlayerControl {
 
     fn pause(&self) {
         self.sink.pause();
-    }
-
-    fn stop(&mut self) {
-        self.sink.stop();
     }
 
     fn seek(&self, position: Duration) -> Result<(), rodio::source::SeekError> {
@@ -82,7 +83,6 @@ pub struct Player {
     control: Arc<RwLock<PlayerControl>>,
     condvar: Option<Arc<Condvar>>,
     cancellation_token: Option<CancellationToken>,
-    metadata: Option<AudioMetadata>,
     downloader: Option<Box<Downloader>>,
     /// 回调函数
     callback: Arc<Mutex<Option<Box<dyn Fn(PlayerEvent) + Send + 'static>>>>,
@@ -97,12 +97,6 @@ impl PlaybackControl for Player {
     fn pause(&self) {
         self.control.read().unwrap().pause();
         self.emit(PlayerEvent::Pause);
-    }
-
-    fn stop(&mut self) {
-        self.control.write().unwrap().stop();
-        self.clear();
-        self.emit(PlayerEvent::DurationChange);
     }
 
     fn seek(&self, position: Duration) -> Result<(), rodio::source::SeekError> {
@@ -150,7 +144,6 @@ impl Player {
                 sink,
                 duration: None,
             })),
-            metadata: None,
             downloader: None,
             condvar: None,
             cancellation_token: None,
@@ -176,6 +169,8 @@ impl Player {
 
         // 加载Source
         self.control.write().unwrap().sink.append(source);
+
+        let control = self.control.clone();
 
         Ok(())
     }
@@ -241,6 +236,12 @@ impl Player {
         }
     }
 
+    fn stop(&mut self) {
+        self.control.read().unwrap().stop();
+        self.clear();
+        self.emit(PlayerEvent::DurationChange);
+    }
+
     fn clear(&mut self) {
         // 重置控制器
         let mut control = self.control.write().unwrap();
@@ -269,7 +270,7 @@ impl Player {
 
 impl Drop for Player {
     fn drop(&mut self) {
-        self.control.write().unwrap().stop();
+        self.control.read().unwrap().stop();
         self.clear();
     }
 }

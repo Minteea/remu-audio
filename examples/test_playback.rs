@@ -1,16 +1,13 @@
-mod decoder;
-mod downloader;
-mod events;
-mod player;
-mod reader;
+use remu_audio::events;
+use remu_audio::player;
 
 use anyhow::Result;
 use player::Player;
 use std::thread;
 use std::time::Duration;
 
-use crate::events::PlayerEvent;
-use crate::player::PlaybackControl;
+use events::PlayerEvent;
+use player::PlaybackControl;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -71,12 +68,11 @@ async fn main() -> Result<()> {
             PlayerEvent::Error { message } => {
                 println!("错误: {}", message);
             }
-            _ => {}
         }
     });
 
     // 加载音频文件
-    let file_path = "C:\\Users\\11565\\Music\\ARForest - Art for Rest.mp3";
+    let file_path = "./audio-example/ARForest - Art for Rest.mp3";
     println!("当前文件: {}", file_path);
     println!("状态: 正在加载文件...");
 

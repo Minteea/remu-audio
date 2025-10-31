@@ -196,6 +196,9 @@ impl Downloader {
 
         total_bytes.store(content_length, Ordering::Relaxed);
 
+        // 设置数据容量，以防内存重新分配导致卡顿
+        data.lock().unwrap().set_capacity(content_length as usize);
+
         // 触发HeaderReceived回调
         if let Some(ref cb) = *callback.lock().unwrap() {
             cb(DownloadEvent::HeaderReceived);
@@ -240,6 +243,8 @@ impl Downloader {
                     }
                 }
             }
+
+            data.lock().unwrap().complete();
 
             // 下载完成
             let mut s = status.lock().unwrap();

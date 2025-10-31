@@ -1,7 +1,4 @@
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
-
-/// 播放器事件类型，类似 HTMLMediaElement 的事件
+/// 播放器事件类型
 #[derive(Debug, Clone, PartialEq)]
 pub enum PlayerEvent {
     /// 播放开始或从暂停恢复（对应 play 事件）
