@@ -3,7 +3,6 @@ use std::sync::{
     atomic::{AtomicBool, AtomicU64, Ordering},
     Arc, Mutex,
 };
-use std::thread;
 
 use crate::loader::LoaderEvent;
 use crate::reader::AppendableDataWrapper;

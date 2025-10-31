@@ -91,16 +91,20 @@ pub struct Player {
     callback: Arc<RwLock<Option<Box<dyn Fn(PlayerEvent) + Send + Sync + 'static>>>>,
     loader_callback: Arc<RwLock<Option<Box<dyn Fn(LoaderEvent) + Send + Sync + 'static>>>>,
     empty: Arc<AtomicBool>,
+    ended: Arc<AtomicBool>,
+    autoplay: Arc<AtomicBool>,
 }
 
 impl PlaybackControl for Player {
     fn play(&self) {
         self.control.read().unwrap().play();
+        self.autoplay.store(true, Ordering::SeqCst);
         self.emit(PlayerEvent::Play);
     }
 
     fn pause(&self) {
         self.control.read().unwrap().pause();
+        self.autoplay.store(false, Ordering::SeqCst);
         self.emit(PlayerEvent::Pause);
     }
 
@@ -142,6 +146,7 @@ impl Player {
         let stream = OutputStreamBuilder::open_default_stream()?;
         let mixer = stream.mixer();
         let sink = Sink::connect_new(&mixer);
+        sink.pause();
 
         Ok(Self {
             stream,
@@ -155,6 +160,8 @@ impl Player {
             callback: Arc::new(RwLock::new(None)),
             loader_callback: Arc::new(RwLock::new(None)),
             empty: Arc::new(AtomicBool::new(true)),
+            ended: Arc::new(AtomicBool::new(false)),
+            autoplay: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -181,8 +188,10 @@ impl Player {
         control.sink.append(source);
 
         let callback = self.callback.clone();
+        let ended = self.ended.clone();
         control.sink.append(EmptyCallback::new(Box::new(move || {
             if let Some(ref cb) = *callback.read().unwrap() {
+                ended.store(true, Ordering::SeqCst);
                 cb(PlayerEvent::Ended);
             }
         })));
@@ -313,8 +322,12 @@ impl Player {
         // 重置控制器
         let mut control = self.control.write().unwrap();
         let previous_duration = control.duration.take();
+        let sink = Sink::connect_new(&self.stream.mixer());
+        if !(self.autoplay.load(Ordering::SeqCst)) {
+            sink.pause();
+        }
         *control = PlayerControl {
-            sink: Sink::connect_new(&self.stream.mixer()),
+            sink,
             duration: None,
         };
         drop(control);
@@ -334,6 +347,8 @@ impl Player {
         }
         self.condvar = None;
 
+        self.ended.store(false, Ordering::SeqCst);
+
         if !self.empty() {
             // 标记为已清空，发送清空事件
             self.empty.store(true, Ordering::SeqCst);
@@ -348,6 +363,10 @@ impl Player {
 
     fn empty(&self) -> bool {
         self.empty.load(Ordering::SeqCst)
+    }
+
+    pub fn ended(&self) -> bool {
+        self.ended.load(Ordering::SeqCst)
     }
 }
 
