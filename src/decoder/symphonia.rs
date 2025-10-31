@@ -78,11 +78,8 @@ impl SymphoniaDecoder {
         // Prefer metadata that's provided in the container format, over other tags found during the
         // probe operation.
         if let Some(metadata_rev) = probed.metadata.get().as_ref().and_then(|m| m.current()) {
-            print!("Tags: {:?}", metadata_rev.tags());
-            // print!("Visuals: {:?}", metadata_rev.visuals());
+            println!("Tags: {:?}", metadata_rev.tags());
         }
-
-        println!("123");
 
         let stream = match probed.format.default_track() {
             Some(stream) => stream,

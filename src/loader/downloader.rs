@@ -5,6 +5,7 @@ use std::sync::{
 };
 use std::thread;
 
+use crate::loader::LoaderEvent;
 use crate::reader::AppendableDataWrapper;
 
 /// 下载状态枚举
@@ -14,17 +15,6 @@ pub enum DownloadStatus {
     NotStarted,
     /// 下载中
     Downloading,
-    /// 下载完成
-    Completed,
-    /// 下载中断
-    Aborted,
-}
-
-/// 下载事件枚举，用于回调函数
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DownloadEvent {
-    /// 获取到Header
-    HeaderReceived,
     /// 下载完成
     Completed,
     /// 下载中断
@@ -52,7 +42,7 @@ pub struct Downloader {
     /// 下载线程句柄
     thread_handle: Arc<Mutex<Option<tokio::task::JoinHandle<Result<(), ()>>>>>,
     /// 回调函数
-    callback: Arc<Mutex<Option<Box<dyn Fn(DownloadEvent) + Send + 'static>>>>,
+    callback: Arc<Mutex<Option<Box<dyn Fn(LoaderEvent) + Send + 'static>>>>,
 }
 
 impl Downloader {
@@ -109,9 +99,9 @@ impl Downloader {
     ///
     /// # 注意
     /// 多次调用会替换之前设置的回调函数
-    pub fn handle_message<F>(&self, callback: F)
+    pub fn set_callback<F>(&self, callback: F)
     where
-        F: Fn(DownloadEvent) + Send + 'static,
+        F: Fn(LoaderEvent) + Send + 'static,
     {
         let mut cb = self.callback.lock().unwrap();
         *cb = Some(Box::new(callback));
@@ -180,7 +170,7 @@ impl Downloader {
                 let mut s = status.lock().unwrap();
                 *s = DownloadStatus::Aborted;
                 if let Some(ref cb) = *callback.lock().unwrap() {
-                    cb(DownloadEvent::Aborted);
+                    cb(LoaderEvent::Aborted);
                 }
                 return Err(());
             }
@@ -199,11 +189,6 @@ impl Downloader {
         // 设置数据容量，以防内存重新分配导致卡顿
         data.lock().unwrap().set_capacity(content_length as usize);
 
-        // 触发HeaderReceived回调
-        if let Some(ref cb) = *callback.lock().unwrap() {
-            cb(DownloadEvent::HeaderReceived);
-        }
-
         // 创建流式下载线程
         let handle = tokio::task::spawn(async move {
             // 使用真正的流式下载
@@ -215,7 +200,7 @@ impl Downloader {
                     let mut s = status.lock().unwrap();
                     *s = DownloadStatus::Aborted;
                     if let Some(ref cb) = *callback.lock().unwrap() {
-                        cb(DownloadEvent::Aborted);
+                        cb(LoaderEvent::Aborted);
                     }
                     return Err(());
                 }
@@ -237,7 +222,7 @@ impl Downloader {
                         let mut s = status.lock().unwrap();
                         *s = DownloadStatus::Aborted;
                         if let Some(ref cb) = *callback.lock().unwrap() {
-                            cb(DownloadEvent::Aborted);
+                            cb(LoaderEvent::Aborted);
                         }
                         return Err(());
                     }
@@ -255,10 +240,8 @@ impl Downloader {
             condvar.notify_all();
 
             if let Some(ref cb) = *callback.lock().unwrap() {
-                cb(DownloadEvent::Completed);
+                cb(LoaderEvent::Completed);
             }
-            println!("downloader / 当前线程 ID: {:?}", thread::current().id());
-            println!("下载完成");
             return Ok(());
         });
 

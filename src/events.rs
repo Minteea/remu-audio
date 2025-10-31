@@ -11,6 +11,8 @@ pub enum PlayerEvent {
     Playing,
     /// 播放结束（对应 ended 事件）
     Ended,
+    /// 播放被清空（对应 emptied 事件）
+    Emptied,
     /// 时长变化（对应 durationchange 事件）
     DurationChange,
     /// 音量变化（对应 volumechange 事件）

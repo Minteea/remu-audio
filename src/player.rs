@@ -1,17 +1,20 @@
 use anyhow::{Ok, Result};
 use cpal::FromSample;
 use rodio::mixer::Mixer;
+use rodio::source::EmptyCallback;
 use rodio::Source;
 use rodio::{OutputStream, OutputStreamBuilder, Sink};
 use std::fs::File;
 use std::io::{Read, Seek};
-use std::sync::{Arc, Condvar, Mutex, RwLock};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Condvar, RwLock};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 use crate::decoder::Decoder;
 use crate::events::PlayerEvent;
 use crate::loader::downloader::Downloader;
+use crate::loader::LoaderEvent;
 use crate::reader;
 
 #[allow(dead_code)]
@@ -83,9 +86,11 @@ pub struct Player {
     control: Arc<RwLock<PlayerControl>>,
     condvar: Option<Arc<Condvar>>,
     cancellation_token: Option<CancellationToken>,
-    downloader: Option<Box<Downloader>>,
+    loader: Option<Box<Downloader>>,
     /// 回调函数
-    callback: Arc<Mutex<Option<Box<dyn Fn(PlayerEvent) + Send + 'static>>>>,
+    callback: Arc<RwLock<Option<Box<dyn Fn(PlayerEvent) + Send + Sync + 'static>>>>,
+    loader_callback: Arc<RwLock<Option<Box<dyn Fn(LoaderEvent) + Send + Sync + 'static>>>>,
+    empty: Arc<AtomicBool>,
 }
 
 impl PlaybackControl for Player {
@@ -144,75 +149,126 @@ impl Player {
                 sink,
                 duration: None,
             })),
-            downloader: None,
+            loader: None,
             condvar: None,
             cancellation_token: None,
-            callback: Arc::new(Mutex::new(None)),
+            callback: Arc::new(RwLock::new(None)),
+            loader_callback: Arc::new(RwLock::new(None)),
+            empty: Arc::new(AtomicBool::new(true)),
         })
     }
 
     /** 加载音频源 */
-    pub fn load_source<S>(&mut self, source: S) -> Result<()>
+    fn load<S>(&mut self, source: S) -> Result<()>
     where
         S: Source + Send + 'static,
         f32: FromSample<S::Item>,
     {
-        // 停止上一个音频播放
-        self.control.write().unwrap().stop();
-
         // 清空相关绑定
-        self.clear();
+        if !self.empty() {
+            self.clear();
+        }
+        self.empty.store(false, Ordering::SeqCst);
 
         // 更新时长
         self.control.write().unwrap().duration = source.total_duration();
         self.emit(PlayerEvent::DurationChange);
+        self.emit(PlayerEvent::LoadedMetadata);
+        self.emit(PlayerEvent::LoadedData);
 
         // 加载Source
-        self.control.write().unwrap().sink.append(source);
+        let control = self.control.write().unwrap();
+        control.sink.append(source);
 
-        let control = self.control.clone();
+        let callback = self.callback.clone();
+        control.sink.append(EmptyCallback::new(Box::new(move || {
+            if let Some(ref cb) = *callback.read().unwrap() {
+                cb(PlayerEvent::Ended);
+            }
+        })));
 
         Ok(())
     }
 
     // 加载本地音频文件
     pub async fn load_file(&mut self, file_path: &str) -> Result<()> {
+        // 清空相关绑定
+        if !self.empty() {
+            self.clear();
+        }
+
         // 打开音频文件（支持格式：wav, mp3, flac, ogg等）
         let file = File::open(file_path)?;
         let source = Decoder::try_from(file)?;
 
-        self.load_source(source)?;
+        self.load(source)?;
 
         Ok(())
     }
 
     // 从URL加载音频
     pub async fn load_url(&mut self, url: &str) -> Result<()> {
+        // 清空相关绑定
+        if !self.empty() {
+            self.clear();
+        }
+
         let wrapper = crate::reader::MVecBytesWrapper::new(256 * 1024);
-        let downloader = Downloader::new(wrapper.clone());
-        if let Err(_) = downloader.download(url, None).await {
+        let loader = Downloader::new(wrapper.clone());
+
+        let loader_callback = self.loader_callback.clone();
+        loader.set_callback(move |event| {
+            if let Some(ref cb) = *loader_callback.read().unwrap() {
+                cb(event);
+            }
+        });
+        if let Err(_) = loader.download(url, None).await {
+            self.emit(PlayerEvent::Error {
+                message: "Failed to download URL".into(),
+            });
             return Err(anyhow::anyhow!("Failed to download URL"));
         };
-        let reader = reader::MVecBytesReader::new(wrapper, downloader.condvar());
+        let reader = reader::MVecBytesReader::new(wrapper, loader.condvar());
 
         let cancellation_token = reader.cancellation_token();
-        let _ = self.load(reader).unwrap();
 
-        // condvar, downloader, cancellation_token 应在load之后设置，以免被重置
-        self.condvar = Some(downloader.condvar());
-        self.downloader = Some(Box::new(downloader));
+        let source = Decoder::new(reader)?;
+        if let Err(e) = self.load(source) {
+            return Err(e);
+        }
+
+        // condvar, loader, cancellation_token 应在load之后设置，以免被重置
+        self.condvar = Some(loader.condvar());
+        self.loader = Some(Box::new(loader));
         self.cancellation_token = Some(cancellation_token);
 
         Ok(())
     }
 
-    // 加载音频源
-    pub fn load<R>(&mut self, reader: R) -> Result<()>
+    // 从Reader加载音频
+    pub fn load_reader<R>(&mut self, reader: R) -> Result<()>
     where
         R: Read + Seek + Send + Sync + 'static,
     {
+        // 清空相关绑定
+        if !self.empty() {
+            self.clear();
+        }
+
         let source = Decoder::new(reader)?;
-        self.load_source(source)
+        self.load(source)
+    }
+
+    // 从Source加载音频
+    pub fn load_source(&mut self, source: impl Source + Send + 'static) -> Result<()> {
+        // 清空相关绑定
+        if !self.empty() {
+            self.clear();
+        }
+
+        self.emit(PlayerEvent::LoadStart);
+
+        self.load(source)
     }
 
     pub fn mixer(&self) -> &Mixer {
@@ -222,40 +278,52 @@ impl Player {
         self.control.clone()
     }
 
-    pub fn handle_message<F>(&self, callback: F)
+    pub fn set_callback<F>(&self, callback: F)
     where
-        F: Fn(PlayerEvent) + Send + 'static,
+        F: Fn(PlayerEvent) + Send + Sync + 'static,
     {
-        let mut cb = self.callback.lock().unwrap();
+        let mut cb = self.callback.write().unwrap();
+        *cb = Some(Box::new(callback));
+    }
+
+    pub fn set_loader_callback<F>(&self, callback: F)
+    where
+        F: Fn(LoaderEvent) + Send + Sync + 'static,
+    {
+        let mut cb = self.loader_callback.write().unwrap();
         *cb = Some(Box::new(callback));
     }
 
     fn emit(&self, event: PlayerEvent) {
-        if let Some(ref cb) = *self.callback.lock().unwrap() {
+        if let Some(ref cb) = *self.callback.read().unwrap() {
             cb(event);
         }
     }
 
-    fn stop(&mut self) {
-        self.control.read().unwrap().stop();
+    /// 清空播放状态
+    pub fn stop(&mut self) {
         self.clear();
-        self.emit(PlayerEvent::DurationChange);
     }
 
+    /// 强制清除正在播放的资源
     fn clear(&mut self) {
+        // 停止播放
+        self.control.read().unwrap().stop();
+
         // 重置控制器
         let mut control = self.control.write().unwrap();
+        let previous_duration = control.duration.take();
         *control = PlayerControl {
             sink: Sink::connect_new(&self.stream.mixer()),
             duration: None,
         };
+        drop(control);
 
         // 清空下载器
-        self.downloader = None;
+        self.loader = None;
 
         // 通知Reader取消读取，以免造成阻塞
         if let Some(cancellation_token) = self.cancellation_token.take() {
-            println!("通知Reader取消读取");
             cancellation_token.cancel();
         }
         self.cancellation_token = None;
@@ -265,12 +333,26 @@ impl Player {
             condvar.notify_all();
         }
         self.condvar = None;
+
+        if !self.empty() {
+            // 标记为已清空，发送清空事件
+            self.empty.store(true, Ordering::SeqCst);
+            self.emit(PlayerEvent::Emptied);
+        }
+
+        // 如果之前有播放时长，发送时长变化事件
+        if previous_duration != None {
+            self.emit(PlayerEvent::DurationChange);
+        }
+    }
+
+    fn empty(&self) -> bool {
+        self.empty.load(Ordering::SeqCst)
     }
 }
 
 impl Drop for Player {
     fn drop(&mut self) {
-        self.control.read().unwrap().stop();
         self.clear();
     }
 }

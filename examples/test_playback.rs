@@ -16,58 +16,70 @@ async fn main() -> Result<()> {
 
     let control = player.control();
 
-    player.handle_message(move |event| {
+    player.set_callback(move |event| {
         // 设置事件监听器 - 使用 UI 显示
         match event {
             PlayerEvent::Play => {
-                println!("播放开始");
+                println!("[@Play] 播放开始");
             }
             PlayerEvent::Pause => {
-                println!("播放已暂停");
+                println!("[@Pause] 播放已暂停");
             }
             PlayerEvent::Playing => {
-                println!("正在播放");
+                println!("[@Playing] 正在播放");
+            }
+            PlayerEvent::Emptied => {
+                println!("[@Emptied] 媒体内容已清空");
             }
             PlayerEvent::Ended => {
-                println!("播放完成");
+                println!("[@Ended] 播放完成");
             }
             PlayerEvent::Waiting => {
-                println!("缓冲中...");
+                println!("[@Waiting] 缓冲中...");
             }
             PlayerEvent::DurationChange => {
                 let cl = control.read().unwrap();
                 let duration = cl.duration();
                 drop(cl);
                 if let Some(d) = duration {
-                    println!("时长: {:.1} 秒", d.as_secs_f32());
+                    println!("[@DurationChange] 时长: {:.1} 秒", d.as_secs_f32());
                 } else {
-                    println!("时长: 未知");
+                    println!("[@DurationChange] 时长: 未知");
                 }
             }
             PlayerEvent::VolumeChange => {
                 let cl = control.read().unwrap();
                 let volume = cl.volume();
                 drop(cl);
-                println!("音量: {:.0}%", volume * 100.0);
+                println!("[@VolumeChange] 音量: {:.0}%", volume * 100.0);
             }
             PlayerEvent::Seeking => {
-                println!("正在跳转...");
+                println!("[@Seeking] 正在跳转...");
             }
             PlayerEvent::Seeked => {
-                println!("跳转完成");
+                println!("[@Seeked] 跳转完成");
             }
             PlayerEvent::LoadStart => {
-                println!("开始加载文件...");
+                println!("[@LoadStart] 开始加载文件...");
             }
             PlayerEvent::LoadedData => {
-                println!("数据加载完成");
+                println!("[@LoadedData] 已加载首帧数据");
             }
             PlayerEvent::LoadedMetadata => {
-                println!("元数据加载完成，准备播放");
+                println!("[@LoadedMetadata] 元数据加载完成，准备播放");
             }
             PlayerEvent::Error { message } => {
-                println!("错误: {}", message);
+                println!("[@Error] 错误: {}", message);
             }
+        }
+    });
+
+    player.set_loader_callback(move |event| match event {
+        remu_audio::loader::LoaderEvent::Completed => {
+            println!("[@Loader:Completed] 内容加载完成")
+        }
+        remu_audio::loader::LoaderEvent::Aborted => {
+            println!("[@Loader:Aborted] 内容加载中止")
         }
     });
 
@@ -136,7 +148,6 @@ async fn main() -> Result<()> {
     player.load_url(file_url).await?;
     thread::sleep(Duration::from_secs(20));
 
-    println!("main / 当前线程 ID: {:?}", thread::current().id());
     println!("测试完成！");
 
     Ok(())
